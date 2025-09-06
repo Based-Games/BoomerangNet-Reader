@@ -24,7 +24,6 @@ class Reader:
     @classmethod
     def pollDevice(self, device: hid.Device):
         data = device.read(128, 200)
-        print(data)
         if data == b'':
             return None
         else:
