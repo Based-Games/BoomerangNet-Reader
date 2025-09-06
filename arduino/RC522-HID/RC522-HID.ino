@@ -32,8 +32,8 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
 }
 
 void setup() {
-    Serial.begin(9600);         // Initialize serial for debugging
-    while (!Serial);            // Wait for serial port (for Leonardo/Pro Micro)
+    Serial.begin(9600);         // Initialize serial for debugging      // Wait for serial port (for Leonardo/Pro Micro)
+    delay(500);
     SPI.begin();                // Init SPI bus
     SPI.setClockDivider(SPI_CLOCK_DIV16); // Slow SPI to 1 MHz (for 16 MHz Arduino)
     mfrc522.PCD_Init();         // Init MFRC522 card
