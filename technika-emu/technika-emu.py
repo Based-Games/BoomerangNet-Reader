@@ -25,11 +25,11 @@ class TechnikaEmu():
         '''
         if com.in_waiting:
             s_data = com.read_all()
-            time.sleep(.05)
+            time.sleep(.02)
             com.write(b'\x06')
 
             confirm = com.read_all()
-            time.sleep(.05)
+            time.sleep(.02)
             if confirm == b'\x05':
                 status, stype = DataConstants.processRequest(s_data)
                 
@@ -74,9 +74,8 @@ class TechnikaEmu():
                     if DataConstants.STATUS_GET_S0_B2 == status:
                         self.card_ID = [0x00] * 20
             
-                time.sleep(.05)
                 com.write(response + DataConstants.calcBCC(response))
-
+                
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--com_port', type=str, default="COM9")

@@ -1,3 +1,4 @@
 hid
 hidapi
 argparse
+pyserial

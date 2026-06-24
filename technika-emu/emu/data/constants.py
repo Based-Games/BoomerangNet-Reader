@@ -19,6 +19,7 @@ class DataConstants:
     CARD_DATA = [0x00]*16
 
     REQUEST_AUTH_KEY = b'\x02\x00\x09\x35\x32\x00\x37\x21\x53\x6a\x72\x40\x03\x12' # (key = 37 21 53 6a 72 40)
+    REQUEST_AUTH_T1JP = b'\x02\x00\t52\x00^N!p@j\x03d'
     REQUEST_AUTH_T2 =  b'\x02\x00\t52\x00#Wnj0!\x03n'
     REQUEST_AUTH_CYCLON = b'\x02\x00\t52\x00retsam\x03\x13' # (key = 114, 101, 116, 115, 97, 109, 0)
     REQUEST_CARD_INSERTED = b'\x02\x00\x02\x31\x30\x03\x02'
@@ -70,6 +71,7 @@ class DataConstants:
         '''
         status = {
             self.REQUEST_AUTH_KEY: self.STATUS_AUTH_KEY,
+            self.REQUEST_AUTH_T1JP: self.STATUS_AUTH_KEY,
             self.REQUEST_AUTH_T2: self.STATUS_AUTH_KEY,
             self.REQUEST_AUTH_CYCLON: self.STATUS_AUTH_KEY,
             self.REQUEST_CARD_INSERTED: self.STATUS_CARD_INSERTED,
@@ -82,6 +84,7 @@ class DataConstants:
 
         d_type = {
             self.REQUEST_AUTH_KEY: self.REQUEST_TYPE_STATIC,
+            self.REQUEST_AUTH_T1JP: self.REQUEST_TYPE_STATIC,
             self.REQUEST_AUTH_T2: self.REQUEST_TYPE_STATIC,
             self.REQUEST_AUTH_CYCLON: self.REQUEST_TYPE_STATIC,
             self.REQUEST_CARD_INSERTED: self.REQUEST_TYPE_STATIC,
