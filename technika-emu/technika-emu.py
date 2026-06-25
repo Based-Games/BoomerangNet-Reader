@@ -25,11 +25,11 @@ class TechnikaEmu():
         '''
         if com.in_waiting:
             s_data = com.read_all()
-            time.sleep(.02)
+            time.sleep(.002)
             com.write(b'\x06')
 
             confirm = com.read_all()
-            time.sleep(.02)
+            time.sleep(.002)
             if confirm == b'\x05':
                 status, stype = DataConstants.processRequest(s_data)
                 
@@ -61,6 +61,8 @@ class TechnikaEmu():
                         if self.auth_bad and self.eject_tries <= 4:
                             status = DataConstants.STATUS_EJECT_CARD_NO
                             self.eject_tries += 1
+                        else:
+                            self.card_ID = [0x00] * 20
 
                     response = DataConstants.sendGeneric(status, stype)
 
@@ -71,9 +73,6 @@ class TechnikaEmu():
                     elif status in [DataConstants.STATUS_GET_S0_B1, DataConstants.STATUS_GET_S0_B2]:
                         response = DataConstants.sendCardID(status, self.card_ID)
 
-                    if DataConstants.STATUS_GET_S0_B2 == status:
-                        self.card_ID = [0x00] * 20
-            
                 com.write(response + DataConstants.calcBCC(response))
                 
 if __name__ == '__main__':
