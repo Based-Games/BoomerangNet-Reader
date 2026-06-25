@@ -1,97 +1,172 @@
-import serial, sys, hid, time, argparse
-from emu.data.constants import DataConstants
+import argparse
+import sys
+import time
+
+from emu.data.constants import Packet, DataConstants
 from emu.reader import Reader
 from emu.serial import Serial
 
-class TechnikaEmu():
-    def __init__(self) -> None:
+class TechnikaEmu:
+
+    def __init__(self):
         self.card_UID = [0x00] * 4
         self.card_ID = [0x00] * 20
         self.auth_bad = False
-        self.eject_tries = 0 # Max of 4 eject tries before we agree to eject when auth is bad.
+        self.eject_tries = 0
 
-        self.reading_cards = False
+    def process_request(self, packet: Packet):
+        cmd = packet.command
+        if cmd == DataConstants.CMD_READER_INIT:
+            return DataConstants.build_static_response(
+                DataConstants.RESPONSE_INIT
+            )
+        
+        elif cmd == DataConstants.CMD_EJECT_CARD:
+            if self.auth_bad and self.eject_tries < 4:
+                self.eject_tries += 1
 
-    def readSerial(self, com: serial.Serial, reader: hid.Device) -> None:
-        '''
-        Reads data from the serial port, decides what to do with said data.
-        Given the opened serial port.
+                return DataConstants.build_static_response(
+                    DataConstants.RESPONSE_EJECT_NO
+                )
 
-        Workflow:
-            - Game sends request
-            - Reader says "i am ready"
-            - Game sends "confirmed"
-            - Reader sends response
-        '''
-        if com.in_waiting:
-            s_data = com.read_all()
-            time.sleep(.002)
-            com.write(b'\x06')
+            self.card_ID = [0x00] * 20
+            self.card_UID = [0x00] * 4
+            return DataConstants.build_static_response(
+                DataConstants.RESPONSE_EJECT_OK
+            )
+        
+        elif cmd == DataConstants.CMD_CARD_PRESENT:
+            if self.card_ID == [0x00] * 20:
+                return DataConstants.build_static_response(
+                    DataConstants.RESPONSE_CARD_FALSE
+                )
 
-            confirm = com.read_all()
-            time.sleep(.002)
-            if confirm == b'\x05':
-                status, stype = DataConstants.processRequest(s_data)
-                
-                # Here's where we start polling the reader.
-                if stype == DataConstants.REQUEST_TYPE_STATIC:
-                    if status == DataConstants.STATUS_AUTH_KEY:
-                        if self.card_ID[-12:] == b'000000000000':
-                            status = DataConstants.STATUS_AUTH_KEY_BAD
-                            self.card_ID = [0x00] * 20
-                            self.card_UID = [0x00] * 4
-                            self.auth_bad = True
+            return DataConstants.build_static_response(
+                DataConstants.RESPONSE_CARD_TRUE
+            )
+        
+        elif cmd == DataConstants.CMD_GET_UID:
+            return DataConstants.build_uid_response(
+                self.card_UID
+            )
 
-                    elif status == DataConstants.STATUS_FIND_CARD:
-                        if self.card_ID == [0x00] * 20:
-                            cardid = Reader.pollDevice(reader)
-                            if cardid != None:
-                                while len(cardid) < 20:
-                                    cardid += b'0'
-                                self.card_ID = cardid
-                                self.card_UID = cardid[:4]
-                                self.auth_bad = False
-                                self.eject_tries = 0
+        elif cmd == DataConstants.CMD_AUTH:
+            game = DataConstants.identify_auth_key(packet.payload)
+            if game:
+                print(f"AUTH: {game}")
+                self.auth_bad = False
 
-                                status = DataConstants.STATUS_FIND_CARD_OK
-                        else:
-                            status = DataConstants.STATUS_FIND_CARD_OK
+                response = bytes([
+                    0x02,
+                    0x00,
+                    0x04,
+                    0x35,
+                    0x32,
+                    packet.sector,
+                    0x59,
+                    0x03,
+                ])
 
-                    elif status == DataConstants.STATUS_EJECT_CARD:
-                        if self.auth_bad and self.eject_tries <= 4:
-                            status = DataConstants.STATUS_EJECT_CARD_NO
-                            self.eject_tries += 1
-                        else:
-                            self.card_ID = [0x00] * 20
+                print(response)
 
-                    response = DataConstants.sendGeneric(status, stype)
+                return DataConstants.build_static_response(response)
 
-                elif stype == DataConstants.REQUEST_TYPE_GENERATED:
-                    if status == DataConstants.STATUS_GET_UID:
-                        response = DataConstants.sendUID(status, [0xA5, 0x4A, 0x0A, 0xDF])
+            print("AUTH FAILED")
+            self.auth_bad = True
+            return DataConstants.build_static_response(
+                DataConstants.RESPONSE_AUTH_BAD
+            )
 
-                    elif status in [DataConstants.STATUS_GET_S0_B1, DataConstants.STATUS_GET_S0_B2]:
-                        response = DataConstants.sendCardID(status, self.card_ID)
+        elif cmd == DataConstants.CMD_READ_BLOCK:
+            if len(packet.payload) == 0:
+                return None
+            block = packet.payload[0]
 
-                com.write(response + DataConstants.calcBCC(response))
-                
+            store = self.card_ID
+            if packet.sector == 15 and block == 2:
+                self.card_ID = [0x00] * 20
+                self.card_UID = [0x00] * 4
+
+            return DataConstants.build_block_response(
+                packet.sector,
+                block,
+                store
+            )
+
+        return None
+
+    def readSerial(self, com, reader):
+        if not com.in_waiting:
+            return
+
+        request = com.read_all()
+        com.write(b"\x06")
+        time.sleep(.002)
+
+        confirm = com.read_all()
+        if confirm != b"\x05":
+            return
+
+        try:
+            packet = DataConstants.parse_packet(request)
+        except Exception as e:
+            print(f"Packet parse failed: {e}")
+            return
+
+        if packet.command == DataConstants.CMD_FIND_CARD:
+            if self.card_ID == [0x00] * 20:
+                cardid = Reader.pollDevice(reader)
+
+                if cardid is not None:
+                    while len(cardid) < 20:
+                        cardid += b"0"
+
+                    self.card_ID = list(cardid[:20])
+                    self.card_UID = list(cardid[:4])
+                    self.auth_bad = False
+                    self.eject_tries = 0
+
+            response = DataConstants.build_static_response(
+                DataConstants.RESPONSE_CARD_TRUE
+                if self.card_ID != [0x00] * 20
+                else DataConstants.RESPONSE_CARD_FALSE
+            )
+
+        else:
+            response = self.process_request(packet)
+
+        if response:
+            com.write(response)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--com_port', type=str, default="COM9")
-    parser.add_argument('--baud_rate', type=int, default=9600)
-    parser.add_argument('--card_file', type=str, default="./cards.json")
+    parser.add_argument(
+        "--com_port",
+        type=str,
+        default="COM9"
+    )
+    parser.add_argument(
+        "--baud_rate",
+        type=int,
+        default=9600
+    )
     args = parser.parse_args()
 
-    main_class = TechnikaEmu()
-    com = Serial.openSerial(args.com_port, args.baud_rate)
+    emulator = TechnikaEmu()
+    com = Serial.openSerial(
+        args.com_port,
+        args.baud_rate
+    )
     reader = Reader.loadDevice()
 
-    print('\nWelcome to Technika-Emu!\nThis software will let you use a BN-RC522 HID Reader on DJMax Technika.')
-    print('Please connect a game to get started.\n')
-
+    print("Technika Emulator Started")
     while True:
         try:
-            main_class.readSerial(com, reader)
+            emulator.readSerial(
+                com,
+                reader
+            )
+
         except KeyboardInterrupt:
-            print('goodbye!')
+            print("goodbye!")
             sys.exit()

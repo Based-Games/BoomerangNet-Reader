@@ -35,7 +35,7 @@ class Reader:
             card_data = data[1:33]  # 32 bytes of block data
             # Print as string, replacing non-printable with nothing
             name_str = ''.join(chr(b) if 32 <= b <= 126 else '' for b in card_data)
-            print(f'\nCard Data (as string): {name_str}')
+            print(f'Card Data: {name_str}')
             # Also print hex for debugging
             card_hex = card_data
             return card_hex
